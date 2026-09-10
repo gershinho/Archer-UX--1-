@@ -45,6 +45,9 @@ export function PathfinderChat({
   const [typedText, setTypedText] = useState("");
   const [animatingMessageId, setAnimatingMessageId] = useState<string | null>(null);
   const conversationIdRef = useRef<string | null>(activeConversationId);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const isAtBottomRef = useRef(true);
 
   const hasMessages = messages.length > 0;
   const showChatPanel = hasMessages || isAsking || activeConversationId !== null;
@@ -61,6 +64,7 @@ export function PathfinderChat({
     setTypedText("");
     setAnimatingMessageId(null);
     setIsAsking(false);
+    isAtBottomRef.current = true;
   }, [resetSignal]);
 
   useEffect(() => {
@@ -71,6 +75,7 @@ export function PathfinderChat({
       setTypedText("");
       setAnimatingMessageId(null);
       setIsAsking(false);
+      isAtBottomRef.current = true;
     }
   }, [loadedMessages]);
 
@@ -96,6 +101,34 @@ export function PathfinderChat({
 
     return () => clearInterval(interval);
   }, [animatingMessageId, fullText]);
+
+  // Only follow the bottom while the reader is already there. The answer grows every
+  // 15ms as it types, so following unconditionally would yank the view back down each
+  // tick and make it impossible to scroll up and re-read an earlier answer mid-response.
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
+
+  // Watch the transcript's height rather than reacting to state changes: the answer's
+  // rendered height and the typedText that produced it don't grow in lockstep, so a
+  // render-driven scroll lands on a stale measurement.
+  useEffect(() => {
+    const el = scrollRef.current;
+    const content = contentRef.current;
+    if (!el || !content) return;
+
+    const followBottom = () => {
+      if (!isAtBottomRef.current) return;
+      el.scrollTop = el.scrollHeight;
+    };
+
+    followBottom();
+    const observer = new ResizeObserver(followBottom);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [showChatPanel]);
 
   const handleSearch = async () => {
     const queryToAsk = searchQuery.trim();
@@ -248,31 +281,37 @@ export function PathfinderChat({
                     {askError}
                   </div>
                 )}
-                <div className="flex-1 overflow-y-auto px-8 py-6 archer-scroll space-y-6">
-                  {!hasMessages && !isAsking && activeConversationId && (
-                    <p className="text-sm text-gray-500 text-center py-4">
-                      No messages in this chat yet. Ask a question below to continue.
-                    </p>
-                  )}
-                  {messages.map((msg) =>
-                    msg.role === "user" ? (
-                      <div key={msg.id} className="flex justify-end">
-                        <div className="max-w-[85%] bg-[#173C7A] text-white text-[15px] leading-relaxed px-4 py-3 rounded-2xl rounded-br-md">
-                          {msg.content}
+                <div
+                  ref={scrollRef}
+                  onScroll={handleScroll}
+                  className="flex-1 overflow-y-auto px-8 py-6 archer-scroll"
+                >
+                  <div ref={contentRef} className="space-y-6">
+                    {!hasMessages && !isAsking && activeConversationId && (
+                      <p className="text-sm text-gray-500 text-center py-4">
+                        No messages in this chat yet. Ask a question below to continue.
+                      </p>
+                    )}
+                    {messages.map((msg) =>
+                      msg.role === "user" ? (
+                        <div key={msg.id} className="flex justify-end">
+                          <div className="max-w-[85%] bg-[#173C7A] text-white text-[15px] leading-relaxed px-4 py-3 rounded-2xl rounded-br-md">
+                            {msg.content}
+                          </div>
                         </div>
+                      ) : (
+                        <div key={msg.id} className="min-w-0">
+                          {renderAssistantContent(msg)}
+                        </div>
+                      )
+                    )}
+                    {isAsking && messages[messages.length - 1]?.role === "user" && (
+                      <div className="flex items-center gap-2 text-gray-500 text-[15px]">
+                        <Loader2 className="animate-spin" size={16} />
+                        <span>Thinking…</span>
                       </div>
-                    ) : (
-                      <div key={msg.id} className="min-w-0">
-                        {renderAssistantContent(msg)}
-                      </div>
-                    )
-                  )}
-                  {isAsking && messages[messages.length - 1]?.role === "user" && (
-                    <div className="flex items-center gap-2 text-gray-500 text-[15px]">
-                      <Loader2 className="animate-spin" size={16} />
-                      <span>Thinking…</span>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             </motion.div>
