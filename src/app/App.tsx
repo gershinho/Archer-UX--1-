@@ -15,6 +15,7 @@ import logo from "../imports/image.png";
 import { Roadmap } from "./components/Roadmap";
 import { LandingPage } from "./components/LandingPage";
 import { PathfinderChat } from "./components/PathfinderChat";
+import { supabaseConfigError } from "@/lib/supabaseClient";
 import {
   useAuth,
   getDisplayName,
@@ -31,6 +32,25 @@ import {
 } from "@/lib/conversations";
 
 export default function App() {
+  if (supabaseConfigError) {
+    return (
+      <div className="min-h-screen w-screen flex items-center justify-center bg-white px-6 text-center">
+        <div>
+          <h1 className="text-xl font-semibold text-[#173C7A]">
+            Franklin is not configured
+          </h1>
+          <p className="mt-2 text-gray-600">
+            This app is temporarily unavailable. Please try again later.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return <ConfiguredApp />;
+}
+
+function ConfiguredApp() {
   const { session, user, isGuest, loading, signOut } = useAuth();
   const [currentView, setCurrentView] = useState<"pathfinder" | "roadmap">("pathfinder");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
