@@ -24,6 +24,19 @@ export type AskResponse = {
   worksheets?: string[];
 };
 
+export const FRIENDLY_ASK_ERROR_MESSAGE =
+  "Sorry — I couldn't reach the backend right now. Please try again.";
+
+export class AskError extends Error {
+  readonly detail: string;
+
+  constructor(detail: string) {
+    super(FRIENDLY_ASK_ERROR_MESSAGE);
+    this.name = "AskError";
+    this.detail = detail;
+  }
+}
+
 function formatSupabaseFunctionError(error: unknown): string {
   if (!(error && typeof error === "object")) {
     return String(error);
@@ -57,8 +70,7 @@ export async function ask(query: string): Promise<AskResponse> {
     body: { query },
   });
 
-  if (error) throw new Error(formatSupabaseFunctionError(error));
-  if (!data?.answer) throw new Error("Edge function returned no answer.");
+  if (error) throw new AskError(formatSupabaseFunctionError(error));
+  if (!data?.answer) throw new AskError("Edge function returned no answer.");
   return data;
 }
-
