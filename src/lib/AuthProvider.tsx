@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type { AuthError, Session, User } from "@supabase/supabase-js";
-import { supabase } from "./supabaseClient";
+import { supabase, supabaseConfigError } from "./supabaseClient";
 
 type AuthContextValue = {
   session: Session | null;
@@ -24,6 +24,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (supabaseConfigError) {
+      setLoading(false);
+      return;
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
