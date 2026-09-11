@@ -48,6 +48,8 @@ export function PathfinderChat({
   const [composerHeight, setComposerHeight] = useState(56);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const conversationIdRef = useRef<string | null>(activeConversationId);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const shouldAutoScrollRef = useRef(true);
 
   const hasMessages = messages.length > 0;
   const showChatPanel = hasMessages || isAsking || activeConversationId !== null;
@@ -76,6 +78,7 @@ export function PathfinderChat({
     setTypedText("");
     setAnimatingMessageId(null);
     setIsAsking(false);
+    shouldAutoScrollRef.current = true;
   }, [resetSignal]);
 
   useEffect(() => {
@@ -85,6 +88,7 @@ export function PathfinderChat({
       setTypedText("");
       setAnimatingMessageId(null);
       setIsAsking(false);
+      shouldAutoScrollRef.current = true;
     }
   }, [loadedMessages]);
 
@@ -110,6 +114,21 @@ export function PathfinderChat({
 
     return () => clearInterval(interval);
   }, [animatingMessageId, fullText]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (container && shouldAutoScrollRef.current) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [messages.length, typedText]);
+
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    shouldAutoScrollRef.current =
+      container.scrollHeight - container.scrollTop - container.clientHeight <= 80;
+  };
 
   const handleSearch = async () => {
     const queryToAsk = searchQuery.trim();
@@ -259,7 +278,11 @@ export function PathfinderChat({
                     Franklin Response
                   </h3>
                 </div>
-                <div className="flex-1 overflow-y-auto px-8 py-6 archer-scroll space-y-6">
+                <div
+                  ref={scrollContainerRef}
+                  onScroll={handleScroll}
+                  className="flex-1 overflow-y-auto px-8 py-6 archer-scroll space-y-6"
+                >
                   {!hasMessages && !isAsking && activeConversationId && (
                     <p className="text-sm text-gray-500 text-center py-4">
                       No messages in this chat yet. Ask a question below to continue.
