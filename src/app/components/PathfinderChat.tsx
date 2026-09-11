@@ -9,6 +9,8 @@ import {
 } from "@/lib/conversations";
 import { FormattedAnswer } from "./FormattedAnswer";
 
+const MAX_COMPOSER_HEIGHT = 200;
+
 function sliceWithCompleteUrls(text: string, endIndex: number): string {
   const slice = text.slice(0, endIndex);
   const urlPattern = /https?:\/\/[^\s)>\]"']+/g;
@@ -43,15 +45,30 @@ export function PathfinderChat({
   const [isAsking, setIsAsking] = useState(false);
   const [typedText, setTypedText] = useState("");
   const [animatingMessageId, setAnimatingMessageId] = useState<string | null>(null);
+  const [composerHeight, setComposerHeight] = useState(56);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const conversationIdRef = useRef<string | null>(activeConversationId);
 
   const hasMessages = messages.length > 0;
   const showChatPanel = hasMessages || isAsking || activeConversationId !== null;
   const isSearching = showChatPanel;
+  const isComposerExpanded = isSearching || composerHeight > 56;
 
   useEffect(() => {
     conversationIdRef.current = activeConversationId;
   }, [activeConversationId]);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+    const nextHeight = Math.min(textarea.scrollHeight, MAX_COMPOSER_HEIGHT);
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY =
+      textarea.scrollHeight > MAX_COMPOSER_HEIGHT ? "auto" : "hidden";
+    setComposerHeight(nextHeight);
+  }, [searchQuery]);
 
   useEffect(() => {
     setMessages([]);
@@ -108,6 +125,7 @@ export function PathfinderChat({
 
     setMessages((prev) => [...prev, userMsg]);
     setSearchQuery("");
+    setComposerHeight(56);
     setIsAsking(true);
 
     let conversationId = conversationIdRef.current;
@@ -289,6 +307,7 @@ export function PathfinderChat({
           className={`relative w-full transition-transform duration-300 ${!isSearching && "hover:scale-[1.02]"}`}
         >
           <textarea
+            ref={textareaRef}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -303,23 +322,22 @@ export function PathfinderChat({
                 const newValue =
                   searchQuery.substring(0, start) + "\n" + searchQuery.substring(end);
                 setSearchQuery(newValue);
-                setTimeout(() => {
-                  target.selectionStart = target.selectionEnd = start + 1;
-                }, 0);
+                requestAnimationFrame(() => {
+                  target.setSelectionRange(start + 1, start + 1);
+                });
               }
             }}
             placeholder={isSearching ? "Ask a new question..." : "Search for career advice..."}
-            className={`block w-full px-6 pr-16 border-2 border-[#173C7A] focus:outline-none bg-white shadow-md text-gray-800 resize-none overflow-hidden leading-[24px] ${
-              isSearching || searchQuery.includes("\n") || searchQuery.length > 50
-                ? "py-[13px] rounded-3xl h-[50px]"
-                : "py-[14px] rounded-full h-[56px]"
+            className={`block w-full px-6 pr-16 border-2 border-[#173C7A] focus:outline-none bg-white shadow-md text-gray-800 resize-none overflow-x-hidden leading-[24px] ${
+              isComposerExpanded ? "py-[13px] rounded-3xl" : "py-[14px] rounded-full"
             }`}
+            style={{ height: `${composerHeight}px` }}
           />
           <button
             onClick={handleSearch}
             disabled={isAsking}
             className={`absolute right-2 flex items-center justify-center w-[44px] h-[44px] bg-[#306FB8] hover:bg-[#173C7A] disabled:opacity-60 text-white rounded-full transition-transform hover:scale-110 active:scale-95 ${
-              isSearching || searchQuery.includes("\n") || searchQuery.length > 50
+              isComposerExpanded
                 ? "top-1/2 -translate-y-1/2 bg-[#173C7A]"
                 : "top-1/2 -translate-y-1/2"
             }`}
