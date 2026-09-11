@@ -6,6 +6,7 @@ type AuthContextValue = {
   session: Session | null;
   user: User | null;
   isGuest: boolean;
+  isPreview: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signUp: (
@@ -22,9 +23,12 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const isPreview =
+    import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).get("preview") === "true";
 
   useEffect(() => {
-    if (supabaseConfigError) {
+    if (isPreview || supabaseConfigError) {
       setLoading(false);
       return;
     }
@@ -42,7 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [isPreview]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -69,11 +73,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const user = session?.user ?? null;
-  const isGuest = user?.is_anonymous === true;
+  const isGuest = isPreview || user?.is_anonymous === true;
 
   return (
     <AuthContext.Provider
-      value={{ session, user, isGuest, loading, signIn, signUp, signInAsGuest, signOut }}
+      value={{ session, user, isGuest, isPreview, loading, signIn, signUp, signInAsGuest, signOut }}
     >
       {children}
     </AuthContext.Provider>
@@ -103,8 +107,8 @@ export function getDisplayEmail(user: User | null, isGuest: boolean): string {
 }
 
 export function getInitials(user: User | null, isGuest: boolean): string {
-  if (!user) return "?";
   if (isGuest) return "G";
+  if (!user) return "?";
   const name = getDisplayName(user, false);
   const parts = name.trim().split(/\s+/);
   if (parts.length >= 2) {

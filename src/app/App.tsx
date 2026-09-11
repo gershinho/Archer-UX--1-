@@ -6,13 +6,11 @@ import {
   LogOut,
   Loader2,
   PanelLeft,
-  Compass,
-  Map,
   MessageSquare,
   Trash2,
+  ExternalLink,
 } from "lucide-react";
 import logo from "../imports/image.png";
-import { Roadmap } from "./components/Roadmap";
 import { LandingPage } from "./components/LandingPage";
 import { PathfinderChat } from "./components/PathfinderChat";
 import { supabaseConfigError } from "@/lib/supabaseClient";
@@ -31,8 +29,43 @@ import {
   type ChatMessage,
 } from "@/lib/conversations";
 
+const coaches = [
+  {
+    name: "Job Search Coach",
+    description: "Build a focused target list",
+    initials: "JS",
+    href: "https://chatgpt.com/g/g-6994a70db24c8191a903c64842cf85df-archer-job-search-target-list",
+    color: "bg-[#eee9fb] text-[#6f4fb5]",
+  },
+  {
+    name: "Networking Coach",
+    description: "Build meaningful relationships",
+    initials: "NC",
+    href: "https://chatgpt.com/g/g-691d0b3e51208191a91890adf323089f-archer-networking-coach",
+    color: "bg-[#e8f4f2] text-[#438f83]",
+  },
+  {
+    name: "Resume Coach",
+    description: "Align your credentials",
+    initials: "RC",
+    href: "https://chatgpt.com/g/g-688a2d3690788191a2b3a32bd6449032-archer-resume-coach",
+    color: "bg-[#f9ece8] text-[#c86d5e]",
+  },
+  {
+    name: "Interview Coach",
+    description: "Master the interview",
+    initials: "IC",
+    href: "https://chatgpt.com/g/g-68c4389c741c81919b4a0f3dacf0b555-archer-interview-coach",
+    color: "bg-[#f5f0e3] text-[#b48b3d]",
+  },
+] as const;
+
 export default function App() {
-  if (supabaseConfigError) {
+  const isPreview =
+    import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).get("preview") === "true";
+
+  if (supabaseConfigError && !isPreview) {
     return (
       <div className="min-h-screen w-screen flex items-center justify-center bg-white px-6 text-center">
         <div>
@@ -51,8 +84,7 @@ export default function App() {
 }
 
 function ConfiguredApp() {
-  const { session, user, isGuest, loading, signOut } = useAuth();
-  const [currentView, setCurrentView] = useState<"pathfinder" | "roadmap">("pathfinder");
+  const { session, user, isGuest, isPreview, loading, signOut } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
@@ -93,7 +125,7 @@ function ConfiguredApp() {
     );
   }
 
-  if (!session) {
+  if (!session && !isPreview) {
     return <LandingPage />;
   }
 
@@ -110,12 +142,10 @@ function ConfiguredApp() {
     setActiveConversationId(null);
     setLoadedMessages(null);
     setResetSignal((n) => n + 1);
-    setCurrentView("pathfinder");
   };
 
   const handleSelectConversation = async (id: string) => {
     setActiveConversationId(id);
-    setCurrentView("pathfinder");
     setLoadedMessages(null);
     try {
       const messages = await getConversationMessages(id);
@@ -177,33 +207,6 @@ function ConfiguredApp() {
               />
             </div>
 
-            <div className="p-3 space-y-1">
-              <button
-                onClick={() => setCurrentView("pathfinder")}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  currentView === "pathfinder"
-                    ? "bg-[#306FB8] text-white shadow-sm hover:scale-[1.02]"
-                    : "text-[#173C7A] hover:bg-[#173C7A]/5"
-                }`}
-              >
-                <Compass size={16} />
-                Pathfinder
-              </button>
-              <button
-                onClick={() => setCurrentView("roadmap")}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  currentView === "roadmap"
-                    ? "bg-[#306FB8] text-white shadow-sm hover:scale-[1.02]"
-                    : "text-[#173C7A] hover:bg-[#173C7A]/5"
-                }`}
-              >
-                <Map size={16} />
-                Roadmap
-              </button>
-            </div>
-
-            <div className="mx-3 h-px bg-[#173C7A]/10 my-1.5" />
-
             <div className="px-3 pt-1">
               <button
                 onClick={handleNewChat}
@@ -213,6 +216,46 @@ function ConfiguredApp() {
                 New Chat
               </button>
             </div>
+
+            <div className="mx-3 h-px bg-[#173C7A]/10 my-1.5" />
+
+            <div className="px-3 pt-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 px-2 mb-1.5">
+                Coaches
+              </p>
+              <nav aria-label="Career coaches" className="space-y-0.5">
+                {coaches.map((coach) => (
+                  <a
+                    key={coach.name}
+                    href={coach.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group flex items-center gap-2.5 px-2 py-2 rounded-lg text-[#173C7A] hover:bg-[#173C7A]/5 transition-colors"
+                  >
+                    <span
+                      className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center text-[10px] font-bold ${coach.color}`}
+                    >
+                      {coach.initials}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12px] font-semibold truncate leading-tight">
+                        {coach.name}
+                      </span>
+                      <span className="block text-[10px] text-gray-400 truncate mt-0.5">
+                        {coach.description}
+                      </span>
+                    </span>
+                    <ExternalLink
+                      size={13}
+                      aria-hidden="true"
+                      className="shrink-0 text-gray-300 group-hover:text-[#306FB8] transition-colors"
+                    />
+                  </a>
+                ))}
+              </nav>
+            </div>
+
+            <div className="mx-3 h-px bg-[#173C7A]/10 my-1.5" />
 
             <div className="flex-1 min-h-0 flex flex-col px-3 pt-3 pb-1">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 px-2 mb-2">
@@ -357,18 +400,14 @@ function ConfiguredApp() {
         animate={{ left: isSidebarOpen ? "16rem" : "0rem" }}
         transition={{ duration: 0.2, ease: "easeOut" }}
       >
-        {currentView === "pathfinder" ? (
-          <PathfinderChat
-            key={`pathfinder-${resetSignal}`}
-            activeConversationId={activeConversationId}
-            onActiveConversationChange={setActiveConversationId}
-            onConversationsChange={refreshConversations}
-            loadedMessages={loadedMessages}
-            resetSignal={resetSignal}
-          />
-        ) : (
-          <Roadmap />
-        )}
+        <PathfinderChat
+          key={`pathfinder-${resetSignal}`}
+          activeConversationId={activeConversationId}
+          onActiveConversationChange={setActiveConversationId}
+          onConversationsChange={refreshConversations}
+          loadedMessages={loadedMessages}
+          resetSignal={resetSignal}
+        />
       </motion.div>
     </div>
   );
