@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Loader2 } from "lucide-react";
 import logo from "../../imports/image.png";
-import { ask } from "@/lib/ask";
+import { ask, AskError } from "@/lib/ask";
 import {
   saveExchange,
   type ChatMessage,
@@ -41,7 +41,6 @@ export function PathfinderChat({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAsking, setIsAsking] = useState(false);
-  const [askError, setAskError] = useState<string | null>(null);
   const [typedText, setTypedText] = useState("");
   const [animatingMessageId, setAnimatingMessageId] = useState<string | null>(null);
   const conversationIdRef = useRef<string | null>(activeConversationId);
@@ -57,7 +56,6 @@ export function PathfinderChat({
   useEffect(() => {
     setMessages([]);
     setSearchQuery("");
-    setAskError(null);
     setTypedText("");
     setAnimatingMessageId(null);
     setIsAsking(false);
@@ -67,7 +65,6 @@ export function PathfinderChat({
     if (loadedMessages !== null) {
       setMessages(loadedMessages);
       setSearchQuery("");
-      setAskError(null);
       setTypedText("");
       setAnimatingMessageId(null);
       setIsAsking(false);
@@ -111,7 +108,6 @@ export function PathfinderChat({
 
     setMessages((prev) => [...prev, userMsg]);
     setSearchQuery("");
-    setAskError(null);
     setIsAsking(true);
 
     let conversationId = conversationIdRef.current;
@@ -146,13 +142,15 @@ export function PathfinderChat({
       onActiveConversationChange(conversationId);
       onConversationsChange();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Unknown error";
-      setAskError(message);
+      if (e instanceof AskError) {
+        console.error("Ask request failed:", e.detail);
+      } else {
+        console.error("Ask request failed:", e);
+      }
       const errorMsg: ChatMessage = {
         id: `temp-error-${Date.now()}`,
         role: "assistant",
-        content:
-          "Sorry — I couldn't reach the backend right now. Please check your Supabase Edge Function and try again.",
+        content: e instanceof AskError ? e.message : "Sorry — something went wrong. Please try again.",
         metadata: null,
         created_at: new Date().toISOString(),
       };
@@ -243,11 +241,6 @@ export function PathfinderChat({
                     Franklin Response
                   </h3>
                 </div>
-                {askError && (
-                  <div className="mx-8 mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                    {askError}
-                  </div>
-                )}
                 <div className="flex-1 overflow-y-auto px-8 py-6 archer-scroll space-y-6">
                   {!hasMessages && !isAsking && activeConversationId && (
                     <p className="text-sm text-gray-500 text-center py-4">
