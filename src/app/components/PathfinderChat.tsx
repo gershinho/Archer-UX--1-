@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Loader2 } from "lucide-react";
 import logo from "../../imports/image.png";
-import { ask } from "@/lib/ask";
+import { ask, AskError } from "@/lib/ask";
 import {
   saveExchange,
   type ChatMessage,
 } from "@/lib/conversations";
 import { FormattedAnswer } from "./FormattedAnswer";
+
+const MAX_COMPOSER_HEIGHT = 200;
 
 function sliceWithCompleteUrls(text: string, endIndex: number): string {
   const slice = text.slice(0, endIndex);
@@ -41,36 +43,52 @@ export function PathfinderChat({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAsking, setIsAsking] = useState(false);
-  const [askError, setAskError] = useState<string | null>(null);
   const [typedText, setTypedText] = useState("");
   const [animatingMessageId, setAnimatingMessageId] = useState<string | null>(null);
+  const [composerHeight, setComposerHeight] = useState(56);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const conversationIdRef = useRef<string | null>(activeConversationId);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const shouldAutoScrollRef = useRef(true);
 
   const hasMessages = messages.length > 0;
   const showChatPanel = hasMessages || isAsking || activeConversationId !== null;
   const isSearching = showChatPanel;
+  const isComposerExpanded = isSearching || composerHeight > 56;
 
   useEffect(() => {
     conversationIdRef.current = activeConversationId;
   }, [activeConversationId]);
 
   useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+    const nextHeight = Math.min(textarea.scrollHeight, MAX_COMPOSER_HEIGHT);
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY =
+      textarea.scrollHeight > MAX_COMPOSER_HEIGHT ? "auto" : "hidden";
+    setComposerHeight(nextHeight);
+  }, [searchQuery]);
+
+  useEffect(() => {
     setMessages([]);
     setSearchQuery("");
-    setAskError(null);
     setTypedText("");
     setAnimatingMessageId(null);
     setIsAsking(false);
+    shouldAutoScrollRef.current = true;
   }, [resetSignal]);
 
   useEffect(() => {
     if (loadedMessages !== null) {
       setMessages(loadedMessages);
       setSearchQuery("");
-      setAskError(null);
       setTypedText("");
       setAnimatingMessageId(null);
       setIsAsking(false);
+      shouldAutoScrollRef.current = true;
     }
   }, [loadedMessages]);
 
@@ -97,6 +115,21 @@ export function PathfinderChat({
     return () => clearInterval(interval);
   }, [animatingMessageId, fullText]);
 
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (container && shouldAutoScrollRef.current) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [messages.length, typedText]);
+
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    shouldAutoScrollRef.current =
+      container.scrollHeight - container.scrollTop - container.clientHeight <= 80;
+  };
+
   const handleSearch = async () => {
     const queryToAsk = searchQuery.trim();
     if (!queryToAsk || isAsking) return;
@@ -111,7 +144,7 @@ export function PathfinderChat({
 
     setMessages((prev) => [...prev, userMsg]);
     setSearchQuery("");
-    setAskError(null);
+    setComposerHeight(56);
     setIsAsking(true);
 
     let conversationId = conversationIdRef.current;
@@ -146,13 +179,15 @@ export function PathfinderChat({
       onActiveConversationChange(conversationId);
       onConversationsChange();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Unknown error";
-      setAskError(message);
+      if (e instanceof AskError) {
+        console.error("Ask request failed:", e.detail);
+      } else {
+        console.error("Ask request failed:", e);
+      }
       const errorMsg: ChatMessage = {
         id: `temp-error-${Date.now()}`,
         role: "assistant",
-        content:
-          "Sorry — I couldn't reach the backend right now. Please check your Supabase Edge Function and try again.",
+        content: e instanceof AskError ? e.message : "Sorry — something went wrong. Please try again.",
         metadata: null,
         created_at: new Date().toISOString(),
       };
@@ -243,12 +278,11 @@ export function PathfinderChat({
                     Franklin Response
                   </h3>
                 </div>
-                {askError && (
-                  <div className="mx-8 mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                    {askError}
-                  </div>
-                )}
-                <div className="flex-1 overflow-y-auto px-8 py-6 archer-scroll space-y-6">
+                <div
+                  ref={scrollContainerRef}
+                  onScroll={handleScroll}
+                  className="flex-1 overflow-y-auto px-8 py-6 archer-scroll space-y-6"
+                >
                   {!hasMessages && !isAsking && activeConversationId && (
                     <p className="text-sm text-gray-500 text-center py-4">
                       No messages in this chat yet. Ask a question below to continue.
@@ -296,6 +330,7 @@ export function PathfinderChat({
           className={`relative w-full transition-transform duration-300 ${!isSearching && "hover:scale-[1.02]"}`}
         >
           <textarea
+            ref={textareaRef}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -310,23 +345,22 @@ export function PathfinderChat({
                 const newValue =
                   searchQuery.substring(0, start) + "\n" + searchQuery.substring(end);
                 setSearchQuery(newValue);
-                setTimeout(() => {
-                  target.selectionStart = target.selectionEnd = start + 1;
-                }, 0);
+                requestAnimationFrame(() => {
+                  target.setSelectionRange(start + 1, start + 1);
+                });
               }
             }}
             placeholder={isSearching ? "Ask a new question..." : "Search for career advice..."}
-            className={`block w-full px-6 pr-16 border-2 border-[#173C7A] focus:outline-none bg-white shadow-md text-gray-800 resize-none overflow-hidden leading-[24px] ${
-              isSearching || searchQuery.includes("\n") || searchQuery.length > 50
-                ? "py-[13px] rounded-3xl h-[50px]"
-                : "py-[14px] rounded-full h-[56px]"
+            className={`block w-full px-6 pr-16 border-2 border-[#173C7A] focus:outline-none bg-white shadow-md text-gray-800 resize-none overflow-x-hidden leading-[24px] ${
+              isComposerExpanded ? "py-[13px] rounded-3xl" : "py-[14px] rounded-full"
             }`}
+            style={{ height: `${composerHeight}px` }}
           />
           <button
             onClick={handleSearch}
             disabled={isAsking}
             className={`absolute right-2 flex items-center justify-center w-[44px] h-[44px] bg-[#306FB8] hover:bg-[#173C7A] disabled:opacity-60 text-white rounded-full transition-transform hover:scale-110 active:scale-95 ${
-              isSearching || searchQuery.includes("\n") || searchQuery.length > 50
+              isComposerExpanded
                 ? "top-1/2 -translate-y-1/2 bg-[#173C7A]"
                 : "top-1/2 -translate-y-1/2"
             }`}

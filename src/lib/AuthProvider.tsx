@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type { AuthError, Session, User } from "@supabase/supabase-js";
-import { supabase } from "./supabaseClient";
+import { supabase, supabaseConfigError } from "./supabaseClient";
 
 type AuthContextValue = {
   session: Session | null;
@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     new URLSearchParams(window.location.search).get("preview") === "true";
 
   useEffect(() => {
-    if (isPreview) {
+    if (isPreview || supabaseConfigError) {
       setLoading(false);
       return;
     }

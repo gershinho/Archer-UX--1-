@@ -13,6 +13,7 @@ import {
 import logo from "../imports/image.png";
 import { LandingPage } from "./components/LandingPage";
 import { PathfinderChat } from "./components/PathfinderChat";
+import { supabaseConfigError } from "@/lib/supabaseClient";
 import {
   useAuth,
   getDisplayName,
@@ -60,6 +61,29 @@ const coaches = [
 ] as const;
 
 export default function App() {
+  const isPreview =
+    import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).get("preview") === "true";
+
+  if (supabaseConfigError && !isPreview) {
+    return (
+      <div className="min-h-screen w-screen flex items-center justify-center bg-white px-6 text-center">
+        <div>
+          <h1 className="text-xl font-semibold text-[#173C7A]">
+            Franklin is not configured
+          </h1>
+          <p className="mt-2 text-gray-600">
+            This app is temporarily unavailable. Please try again later.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return <ConfiguredApp />;
+}
+
+function ConfiguredApp() {
   const { session, user, isGuest, isPreview, loading, signOut } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -69,6 +93,7 @@ export default function App() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [loadedMessages, setLoadedMessages] = useState<ChatMessage[] | null>(null);
   const [resetSignal, setResetSignal] = useState(0);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   const refreshConversations = useCallback(async () => {
     setConversationsLoading(true);
@@ -124,13 +149,6 @@ export default function App() {
     setLoadedMessages(null);
     try {
       const messages = await getConversationMessages(id);
-      if (messages.length === 0) {
-        await deleteConversation(id);
-        setActiveConversationId(null);
-        setLoadedMessages(null);
-        await refreshConversations();
-        return;
-      }
       setLoadedMessages(messages);
     } catch {
       setLoadedMessages([]);
@@ -138,6 +156,7 @@ export default function App() {
   };
 
   const handleDeleteConversation = async (id: string) => {
+    setConfirmingDeleteId(null);
     try {
       await deleteConversation(id);
       if (activeConversationId === id) {
@@ -258,30 +277,54 @@ export default function App() {
                       activeConversationId === conv.id ? "bg-[#306FB8]/10" : "hover:bg-gray-50"
                     }`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => handleSelectConversation(conv.id)}
-                      className={`flex-1 min-w-0 text-left px-2.5 py-2 rounded-lg transition-colors ${
-                        activeConversationId === conv.id ? "text-[#173C7A]" : "text-gray-700"
-                      }`}
-                    >
-                      <p className="text-[13px] font-medium truncate leading-tight">{conv.title}</p>
-                      <p className="text-[11px] text-gray-400 mt-0.5">
-                        {formatConversationDate(conv.updated_at)}
-                      </p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteConversation(conv.id)}
-                      aria-label={`Delete chat: ${conv.title}`}
-                      className={`shrink-0 p-2 mr-0.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all ${
-                        activeConversationId === conv.id
-                          ? "opacity-100"
-                          : "opacity-0 group-hover:opacity-100"
-                      }`}
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {confirmingDeleteId === conv.id ? (
+                      <div className="flex-1 flex items-center justify-between gap-2 px-2 py-1.5">
+                        <span className="text-[12px] font-medium text-gray-700">Delete chat?</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteConversation(conv.id)}
+                            className="px-2 py-1 rounded-md text-[11px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            Delete?
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingDeleteId(null)}
+                            className="px-2 py-1 rounded-md text-[11px] font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectConversation(conv.id)}
+                          className={`flex-1 min-w-0 text-left px-2.5 py-2 rounded-lg transition-colors ${
+                            activeConversationId === conv.id ? "text-[#173C7A]" : "text-gray-700"
+                          }`}
+                        >
+                          <p className="text-[13px] font-medium truncate leading-tight">{conv.title}</p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">
+                            {formatConversationDate(conv.updated_at)}
+                          </p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmingDeleteId(conv.id)}
+                          aria-label={`Delete chat: ${conv.title}`}
+                          className={`shrink-0 p-2 mr-0.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all ${
+                            activeConversationId === conv.id
+                              ? "opacity-100"
+                              : "opacity-0 group-hover:opacity-100"
+                          }`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
